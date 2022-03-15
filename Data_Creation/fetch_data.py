@@ -1,5 +1,6 @@
 from riotwatcher import LolWatcher, ApiError, RiotWatcher
 from env_vars import riot_key
+from collections import defaultdict
 
 def fetch_challenger_puuids(watcher):
     region = "NA1"
@@ -38,6 +39,24 @@ def fetch_matchIDs(watcher, puuids):
     
     return list(matchIDs)
 
+def fetch_gameinfo(watcher, matchID):
+    region = "AMERICAS"
+    
+    game = watcher.match.by_id(region, matchID)
+    timeline = watcher.match.timeline_by_match(region, matchID)
+
+    ### Define Players
+    
+    players= defaultdict(lambda: dict())
+    for player in game["info"]["participants"]:
+        players[player['puuid']]['participantId'] = player['participantId']
+    
+    ### Find roles of players and win status
+    
+    for player in game["info"]["participants"]:
+        players[player["puuid"]]["win"] = player["win"]
+        players[player["puuid"]]["position"] = player["teamPosition"]
+    
 if __name__ == "__main__":
     
     # Load API Key and set variables
