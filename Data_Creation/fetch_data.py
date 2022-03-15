@@ -25,11 +25,14 @@ def fetch_challenger_puuids(watcher):
 
 def fetch_matchIDs(watcher, puuids):
     region="AMERICAS"
+    queue = 420
     matchIDs = set()
     
     for id in puuids:
         try:
-            matchIDs.update(watcher.match.matchlist_by_puuid(puuid = id, region = region))
+            matchIDs.update(watcher.match.matchlist_by_puuid(puuid = id, 
+                                                             region = region,
+                                                             queue = queue))
         except Exception as e:
             pass
     
