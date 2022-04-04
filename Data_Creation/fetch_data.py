@@ -1,6 +1,8 @@
 from riotwatcher import LolWatcher, ApiError, RiotWatcher
 from env_vars import riot_key
 from collections import defaultdict, Counter
+import pandas as pd
+import tqdm
 
 # Note, much help for code was taken from this amazing resource: https://github.com/Hab5/league-machine-learning/blob/main/PipelineAPI.py
 
@@ -19,7 +21,7 @@ def fetch_challenger_puuids(watcher):
     
     puuids = []
     
-    for player in challenger_players:
+    for player in tqdm.tqdm(challenger_players, desc = 'tqdm() Progress Bar'):
         puuid = fetch_puuid(player)
         if puuid != "ERROR":
             puuids.append(puuid)
@@ -31,11 +33,12 @@ def fetch_matchIDs(watcher, puuids):
     queue = 420
     matchIDs = set()
     
-    for id in puuids:
+    for id in tqdm.tqdm(puuids, desc = 'tqdm() Progress Bar'):
         try:
             matchIDs.update(watcher.match.matchlist_by_puuid(puuid = id, 
                                                              region = region,
-                                                             queue = queue))
+                                                             queue = queue,
+                                                             count = 100))
         except Exception as e:
             pass
     
@@ -92,8 +95,13 @@ def main():
     watcher = LolWatcher(key)
     
     # Fetch Challenger IDs and write them to a csv
-    challenger_puuids = fetch_challenger_puuids(watcher)
-    challenger_puuids.to_csv('Data/Puuids.csv', columns = 'Puuid', index=False)
+    challenger_puuids = pd.DataFrame(fetch_challenger_puuids(watcher), columns = ['Puuid'])
+    challenger_puuids.to_csv('Data/Puuids.csv', index=False)
+    
+    # Fetch Match IDs given Challenger IDs
+    challenger_puuids = pd.read_csv('Data/Puuids.csv')
+    challenger_matches = fetch_matchIDs(watcher, list(challenger_puuids['Puuid'].values))
+    
     
     #out = 'data.csv'
     #f = open(out, 'a')
