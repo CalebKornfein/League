@@ -91,11 +91,12 @@ def main():
     key = riot_key()
     watcher = LolWatcher(key)
     
+    # Fetch Challenger IDs and write them to a csv
+    challenger_puuids = fetch_challenger_puuids(watcher)
+    challenger_puuids.to_csv('Data/Puuids.csv', columns = 'Puuid', index=False)
+    
     #out = 'data.csv'
     #f = open(out, 'a')
     
 if __name__ == "__main__":
-    
-    # Load API Key and set variables
-    key = riot_key()
-    watcher = LolWatcher(key)
+    main()
