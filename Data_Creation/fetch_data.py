@@ -3,6 +3,9 @@ from env_vars import riot_key
 from collections import defaultdict, Counter
 import pandas as pd
 import tqdm
+import random
+import csv
+from itertools import product
 
 # Note, much help for code was taken from this amazing resource: https://github.com/Hab5/league-machine-learning/blob/main/PipelineAPI.py
 
@@ -72,7 +75,7 @@ def fetch_gameinfo(watcher, matchID):
         players[reverse_players[int(participantID)]]["Gold"] = status_dict['totalGold']
     
     ### Fetch kills for each player by rolling through frames
-    for frame in frames:
+    for frame in frames[:16]:
             for event in frame['events']:
                 if event['type'] == 'CHAMPION_KILL':
                     if event['killerId'] == 0:
@@ -86,8 +89,58 @@ def fetch_gameinfo(watcher, matchID):
         players[player]['kills'] = defaultdict(lambda: 0)
         for lane, num_kills in kills.items():
             players[player]['kills'][lane] = num_kills
-                
-    return players
+    
+    ### Map teams and roles to players
+    
+    roles = {}
+    for player, player_values in players.items():
+        position = player_values['position']
+        if player_values['win'] == True:
+            roles[position + '1'] = player
+        else:
+            roles[position + '2'] = player
+            
+    ### Calculate all team1 stats:
+    team1 = ['TOP1', 'JUNGLE1', 'MIDDLE1', 'BOTTOM1', 'UTILITY1']
+    team2 = ['TOP2', 'JUNGLE2', 'MIDDLE2', 'BOTTOM2', 'UTILITY2']
+
+    consolidated_stats = {}
+    
+    for role in team1 + team2:
+        consolidated_stats[f'{role}_GOLD'] = players[roles[role]]['Gold'] 
+    
+    for p1, p2 in product(team1, team2):
+        key = f'{p1}_{p2}'
+        consolidated_stats[key] = players[roles[p1]]['kills'][p2[:-1]]    
+    
+    for p1, p2 in product(team2, team1):
+        key = f'{p1}_{p2}'
+        consolidated_stats[key] = players[roles[p1]]['kills'][p2[:-1]]      
+    
+    return consolidated_stats
+
+def fetch_matches(watcher, matches):
+    
+    def write_csv(data):
+        with open('Data/Matches.csv', 'a') as outfile:
+            writer = csv.writer(outfile)
+            writer.writerow(data)
+    
+    team1 = ['TOP1', 'JUNGLE1', 'MIDDLE1', 'BOTTOM1', 'UTILITY1']
+    team2 = ['TOP2', 'JUNGLE2', 'MIDDLE2', 'BOTTOM2', 'UTILITY2']
+    
+    gold = [f'{role}_GOLD' for role in team1 + team2]
+    team1keys = [f'{p1}_{p2}' for p1, p2 in product(team1, team2)]
+    team2keys = [f'{p1}_{p2}' for p1, p2 in product(team2, team1)]
+    
+    keys = gold + team1keys + team2keys
+    write_csv(keys)
+    
+    for matchID in tqdm.tqdm(matches, desc = 'tqdm() Progress Bar'):
+        stats = fetch_gameinfo(watcher, matchID)
+        ordered_stats = [stats[key] for key in keys]
+        write_csv(ordered_stats)
+        
     
 def main():
     # Load API Key and set variables
@@ -101,10 +154,13 @@ def main():
     # Fetch Match IDs given Challenger IDs
     challenger_puuids = pd.read_csv('Data/Puuids.csv')
     challenger_matches = fetch_matchIDs(watcher, list(challenger_puuids['Puuid'].values))
+    random.shuffle(challenger_matches)
+    challenger_matches = pd.DataFrame(challenger_matches, columns = ['MatchID'])
+    challenger_matches.to_csv('Data/MatchIDs.csv', index=False)
     
-    
-    #out = 'data.csv'
-    #f = open(out, 'a')
+    # Fetch data for each Match given their IDs
+    matchIDs = pd.read_csv('Data/MatchIDs.csv')
+    matchinfo = fetch_matches(watcher, list(matchIDs['MatchID'].values))
     
 if __name__ == "__main__":
     main()
