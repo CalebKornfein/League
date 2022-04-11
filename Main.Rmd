@@ -1,0 +1,98 @@
+---
+title: "Estimating Role Strength in League of Legends"
+author: "Caleb Kornfein"
+date: "4/7/2022"
+output: html_document
+---
+
+## 1 - Introduction
+```{r setup, include=FALSE}
+library(tidyverse)
+library(patchwork)
+library(caret)
+library(gt)
+library(arm)
+library(MASS)
+library(plotROC)
+library(pROC)
+library(broom)
+library(knitr)
+library(corrplot)
+library(kableExtra)
+library(RColorBrewer)
+library(lemon)
+
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE,
+  message = FALSE
+)
+```
+
+### EDA
+![League Map](Figures/Map.png)
+```{r}
+#![League Map](Figures/Map.png)
+```
+
+
+
+```{r load}
+df <- read.csv("Data_Creation/Data/final.csv")
+```
+
+```{r}
+ggplot(df, aes(x=TOP_GOLD_DIFF, color=OUTCOME)) +
+  geom_histogram(fill="white", alpha=0.5, position="identity")
+```
+
+
+```{r role histograms}
+top <- ggplot(data = df, aes(x = TOP_GOLD_DIFF, fill = OUTCOME)) +
+  geom_density(alpha = 0.5, color = alpha("white", 0)) +
+  labs(y = "Density", x = "Uniqueness", title = "Preliminary Round") +
+  theme_minimal()
+top
+```
+
+### MODEL
+```{r model}
+df[,'OUTCOME'] <- factor(df[,'OUTCOME'])
+
+m1 <- glm(OUTCOME ~ TOP_GOLD_DIFF + MIDDLE_GOLD_DIFF + JUNGLE_GOLD_DIFF + UTILITY_GOLD_DIFF + BOTTOM_GOLD_DIFF, data = df, family = "binomial")
+m1
+```
+
+```{r formattting}
+confidence <- as.data.frame(confint(m1) * 100)
+m1_summary <- as.data.frame(coef(summary(m1)))
+m1_summary$Lower <- confidence$"2.5 %"
+m1_summary$Upper <- confidence$"97.5 %"
+m1_summary$Estimate <- m1_summary$Estimate * 100
+
+rownames(m1_summary) <- c('Intercept', 'Top Gold Difference', 'Middle Gold Difference', 'Jungle Gold Difference', 'Support Gold Difference', 'Bottom Gold Difference')
+colnames(m1_summary) <- c('Estimate', 'Std. Error', 'Z-Score', 'P', 'Lower', 'Upper')
+
+m1_summary <- m1_summary %>%
+  mutate(P = case_when(P < 0.001 ~ "<0.001",
+                       P < 1 ~ paste(format(round(P, digits=3), nsmall=3), sep=""))) %>%
+  mutate(Estimate = format(round(Estimate, digits=3), nsmall=3)) %>%
+  mutate(Lower = format(round(Lower, digits=3), nsmall=3)) %>%
+  mutate(Upper = format(round(Upper, digits=3), nsmall=3))
+
+colnames(m1_summary) <- c('Estimate', 'Std. Error', 'Z-Score', 'P-value', '2.5%', '97.5%')
+m1_summary <- m1_summary[c('Estimate', '2.5%', '97.5%', 'P-value')]
+```
+
+```{r display}
+m1_summary %>%
+  kbl(caption = "Model Summary",
+      format="html",
+      align="c",
+      #row.names = FALSE,
+      #col.names = c("Effect", "Adjusted* difference (95% CI) in mean postoperative eGFR","P-value"),
+      escape = FALSE) %>%
+  kable_classic(full_width = F, html_font = "Helvetica")
+```
+
+ 
