@@ -29,48 +29,26 @@ knitr::opts_chunk$set(
 )
 ```
 
-### EDA
-![League Map](Figures/Map.png)
-```{r}
-#![League Map](Figures/Map.png)
-```
-
-
-
 ```{r load}
-df <- read.csv("Data_Creation/Data/final.csv")
-```
-
-```{r}
-ggplot(df, aes(x=TOP_GOLD_DIFF, color=OUTCOME)) +
-  geom_histogram(fill="white", alpha=0.5, position="identity")
-```
-
-
-```{r role histograms}
-top <- ggplot(data = df, aes(x = TOP_GOLD_DIFF, fill = OUTCOME)) +
-  geom_density(alpha = 0.5, color = alpha("white", 0)) +
-  labs(y = "Density", x = "Uniqueness", title = "Preliminary Round") +
-  theme_minimal()
-top
+df <- read.csv("Data_Creation/Data/final_ratio.csv")
 ```
 
 ### MODEL
 ```{r model}
 df[,'OUTCOME'] <- factor(df[,'OUTCOME'])
 
-m1 <- glm(OUTCOME ~ TOP_GOLD_DIFF + MIDDLE_GOLD_DIFF + JUNGLE_GOLD_DIFF + UTILITY_GOLD_DIFF + BOTTOM_GOLD_DIFF, data = df, family = "binomial")
+m1 <- glm(OUTCOME ~ TOP_GOLD_RATIO + MIDDLE_GOLD_RATIO + JUNGLE_GOLD_RATIO + UTILITY_GOLD_RATIO + BOTTOM_GOLD_RATIO, data = df, family = "binomial")
 m1
 ```
 
 ```{r formattting}
-confidence <- as.data.frame(confint(m1) * 100)
+confidence <- as.data.frame(confint(m1))
 m1_summary <- as.data.frame(coef(summary(m1)))
 m1_summary$Lower <- confidence$"2.5 %"
 m1_summary$Upper <- confidence$"97.5 %"
-m1_summary$Estimate <- m1_summary$Estimate * 100
+m1_summary$Estimate <- m1_summary$Estimate
 
-rownames(m1_summary) <- c('Intercept', 'Top Gold Difference', 'Middle Gold Difference', 'Jungle Gold Difference', 'Support Gold Difference', 'Bottom Gold Difference')
+rownames(m1_summary) <- c('Intercept', 'Top Gold Ratio', 'Middle Gold Ratio', 'Jungle Gold Ratio', 'Support Gold Ratio', 'Bottom Gold Ratio')
 colnames(m1_summary) <- c('Estimate', 'Std. Error', 'Z-Score', 'P', 'Lower', 'Upper')
 
 m1_summary <- m1_summary %>%
@@ -86,13 +64,37 @@ m1_summary <- m1_summary[c('Estimate', '2.5%', '97.5%', 'P-value')]
 
 ```{r display}
 m1_summary %>%
-  kbl(caption = "Model Summary",
+  kbl(caption = "",
       format="html",
       align="c",
       #row.names = FALSE,
       #col.names = c("Effect", "Adjusted* difference (95% CI) in mean postoperative eGFR","P-value"),
       escape = FALSE) %>%
   kable_classic(full_width = F, html_font = "Helvetica")
+```
+
+
+```{r diagnostics}
+# CODE TAKEN FROM: http://www.sthda.com/english/articles/36-classification-methods-essentials/148-logistic-regression-assumptions-and-diagnostics-in-r/
+
+predictors <- c('Top','Middle','Jungle','Support', 'Bottom')
+
+small <- df[,c('TOP_GOLD_RATIO','MIDDLE_GOLD_RATIO','JUNGLE_GOLD_RATIO','UTILITY_GOLD_RATIO', 'BOTTOM_GOLD_RATIO')]
+
+colnames(small) <- predictors
+
+probabilities <- predict(m1, type = "response")
+
+small <- small %>%
+  mutate(logit = log(probabilities/(1-probabilities))) %>%
+  gather(key = "predictors", value = "predictor.value", -logit)
+
+ggplot(small, aes(logit, predictor.value))+
+  geom_point(size = 0.5, alpha = 0.5) +
+  geom_smooth(method = "loess") + 
+  theme_bw() + 
+  labs(y = "Gold Ratio", x = "Predicted value (log odds)") +
+  facet_wrap(~predictors, scales = "free_y")
 ```
 
  
